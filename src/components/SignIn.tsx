@@ -1,37 +1,81 @@
-import React from "react";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { auth } from "../firebase";
+'use client'
 
-const SignIn: React.FC = () => {
-  const navigate = useNavigate();
+import { useState } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
-  const handleGoogleSignIn = async () => {
+export default function SignIn() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const supabase = createClientComponentClient()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      navigate("/profile");
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+      router.refresh()
     } catch (error) {
-      console.error("Error signing in with Google:", error);
+      setError(error.message)
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="sign-in p-4 flex flex-col items-center">
-      <h2 className="text-2xl font-bold mb-4">Sign In</h2>
-      <button
-        onClick={handleGoogleSignIn}
-        className="bg-white text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded shadow flex items-center"
-      >
-        <img
-          src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-          alt="Google logo"
-          className="w-6 h-6 mr-2"
+    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-sm">
+      {error && (
+        <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+      
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Email
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          required
         />
-        Sign in with Google
-      </button>
-    </div>
-  );
-};
+      </div>
 
-export default SignIn;
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          required
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 
+                 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+      >
+        {isLoading ? 'Signing in...' : 'Sign in'}
+      </button>
+    </form>
+  )
+}
