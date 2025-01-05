@@ -18,11 +18,14 @@ import { getHolidaysForMonth } from '@/utils/holidays'
 import { CalendarEvent } from '@/types/calendar'
 
 interface TaskCalendarProps {
-  onNoteSelect: (noteId: string | null) => void
-  selectedNote: string | null
+  onNoteSelect?: (note: string | null) => void
+  selectedNote?: string | null
 }
 
-export default function TaskCalendar({ onNoteSelect, selectedNote }: TaskCalendarProps) {
+export default function TaskCalendar({ 
+  onNoteSelect = () => {}, 
+  selectedNote = null 
+}: TaskCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [notes, setNotes] = useState<Record<string, string>>({})
