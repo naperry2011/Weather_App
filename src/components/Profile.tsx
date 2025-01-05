@@ -20,6 +20,8 @@ export default function Profile() {
   const supabase = createClientComponentClient()
 
   useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
     const fetchUserData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -36,6 +38,24 @@ export default function Profile() {
 
         if (error) throw error
         setPosts(userPosts || [])
+
+        // Set up real-time subscription after we have the user
+        channel = supabase
+          .channel('user_posts')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'posts',
+              filter: `user_id=eq.${user.id}`
+            },
+            () => {
+              fetchUserData()
+            }
+          )
+          .subscribe()
+
       } catch (error) {
         console.error('Error fetching user data:', error)
       } finally {
@@ -45,24 +65,10 @@ export default function Profile() {
 
     fetchUserData()
 
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('user_posts')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'posts',
-          filter: `user_id=eq.${supabase.auth.user()?.id}`
-        }, 
-        () => {
-          fetchUserData()
-        }
-      )
-      .subscribe()
-
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [supabase, router])
 
