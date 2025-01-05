@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import { AuthError } from '@supabase/supabase-js'
 
 export default function SignIn() {
   const [email, setEmail] = useState('')
@@ -51,7 +52,11 @@ export default function SignIn() {
       if (error) throw error
       router.refresh()
     } catch (error) {
-      setError(error.message)
+      if (error instanceof AuthError) {
+        setError(error.message)
+      } else {
+        setError('An unexpected error occurred')
+      }
     } finally {
       setIsLoading(false)
     }
