@@ -1,73 +1,76 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getAuth } from "firebase/auth";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../firebase";
+'use client'
 
-const AddPost: React.FC = () => {
-  const [text, setText] = useState("");
-  const [image, setImage] = useState<File | null>(null);
-  const navigate = useNavigate();
+import React, { useState } from "react"
+import { useRouter } from "next/navigation"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImage(e.target.files[0]);
-    }
-  };
+export default function AddPost() {
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
-
+    e.preventDefault()
+    
     try {
-      let imageUrl = "";
-      if (image) {
-        const imageRef = ref(storage, `posts/${user.uid}/${Date.now()}`);
-        await uploadBytes(imageRef, image);
-        imageUrl = await getDownloadURL(imageRef);
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-      await addDoc(collection(db, "posts"), {
-        userId: user.uid,
-        text,
-        imageUrl,
-        createdAt: serverTimestamp(),
-      });
+      const { error } = await supabase
+        .from('posts')
+        .insert([
+          { 
+            title,
+            content,
+            user_id: user.id
+          }
+        ])
 
-      setText("");
-      setImage(null);
-      navigate("/");
+      if (error) throw error
+      
+      router.refresh()
+      setTitle("")
+      setContent("")
     } catch (error) {
-      console.error("Error creating post:", error);
+      console.error('Error adding post:', error)
     }
-  };
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="add-post p-4 mx-auto max-w-2xl">
-      <h2 className="text-2xl font-bold mb-4 text-center">Create a New Post</h2>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="What's on your mind?"
-        className="w-full p-2 mb-4 border rounded"
-      />
-      <input
-        type="file"
-        onChange={handleImageChange}
-        accept="image/*"
-        className="mb-4"
-      />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Title
+        </label>
+        <input
+          id="title"
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          required
+        />
+      </div>
+      <div>
+        <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Content
+        </label>
+        <textarea
+          id="content"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          rows={4}
+          required
+        />
+      </div>
       <button
         type="submit"
-        className="bg-blue-500 text-white px-4 py-2 rounded"
+        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
       >
-        Post
+        Add Post
       </button>
     </form>
-  );
-};
-
-export default AddPost;
+  )
+}
