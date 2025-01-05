@@ -7,8 +7,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Weather & Task Manager',
-  description: 'A modern weather and task management application',
+  title: 'WeatherTask Dashboard',
+  description: 'Your personal weather and task management dashboard',
 }
 
 export default function RootLayout({
