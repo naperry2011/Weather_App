@@ -1,107 +1,128 @@
-import React, { useState, useEffect } from "react";
-import { User } from "firebase/auth";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-} from "firebase/firestore";
-import { signOut } from "firebase/auth";
-import { auth, db } from "../firebase";
-import { Link, useNavigate } from "react-router-dom";
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
 interface Post {
-  id: string;
-  text: string;
-  imageUrl: string;
+  id: string
+  title: string
+  content: string
+  image_url?: string
+  created_at: string
+  user_id: string
 }
 
-const Profile: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const navigate = useNavigate();
+export default function Profile() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const postsQuery = query(
-          collection(db, "posts"),
-          where("userId", "==", currentUser.uid),
-          orderBy("createdAt", "desc"),
-        );
+    const fetchUserData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/')
+          return
+        }
 
-        const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
-          const newPosts = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Post[];
-          setPosts(newPosts);
-        });
+        const { data: userPosts, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
 
-        return () => unsubscribePosts();
-      } else {
-        setPosts([]);
+        if (error) throw error
+        setPosts(userPosts || [])
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+      } finally {
+        setLoading(false)
       }
-    });
+    }
 
-    return () => unsubscribeAuth();
-  }, []);
+    fetchUserData()
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('user_posts')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'posts',
+          filter: `user_id=eq.${supabase.auth.user()?.id}`
+        }, 
+        () => {
+          fetchUserData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, router])
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
-      navigate("/");
+      await supabase.auth.signOut()
+      router.push('/')
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.error('Error signing out:', error)
     }
-  };
+  }
 
-  if (!user) {
-    return (
-      <div className="profile p-4">
-        <h2 className="text-2xl font-bold mb-4 text-center">Profile</h2>
-        <p>Please sign in to view your profile.</p>
-        <Link
-          to="/signin"
-          className="bg-blue-500 text-white px-4 py-2 rounded mt-4 inline-block"
-        >
-          Sign In
-        </Link>
-      </div>
-    );
+  if (loading) {
+    return <div className="text-center p-4">Loading...</div>
   }
 
   return (
-    <div className="profile p-4">
-      <h2 className="text-2xl font-bold mb-4 text-center">Your Profile</h2>
-      <div className="mx-auto max-w-2xl">
-        <button
-          onClick={handleSignOut}
-          className="bg-red-500 text-white px-4 py-2 rounded mb-4"
-        >
-          Sign Out
-        </button>
-        <h3 className="text-xl font-semibold mb-2">Your Posts</h3>
-        {posts.map((post) => (
-          <div
-            key={post.id}
-            className="post bg-white shadow-md rounded-lg p-4 mb-4"
-          >
-            {post.imageUrl && (
-              <img
-                src={post.imageUrl}
-                alt="Post"
-                className="w-full h-64 object-cover rounded-lg mb-2"
-              />
-            )}
-            <p className="text-gray-800">{post.text}</p>
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              My Profile
+            </h2>
+            <button
+              onClick={handleSignOut}
+              className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            >
+              Sign Out
+            </button>
           </div>
-        ))}
+        </div>
+        
+        <div className="space-y-4">
+          <div className="border-t dark:border-gray-700 pt-4">
+            <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-white">My Posts</h3>
+            {posts.length === 0 ? (
+              <p className="text-gray-600 dark:text-gray-400">No posts yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {posts.map((post) => (
+                  <div key={post.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    {post.image_url && (
+                      <img
+                        src={post.image_url}
+                        alt="Post"
+                        className="w-full h-48 object-cover rounded-lg mb-2"
+                      />
+                    )}
+                    <p className="text-gray-800 dark:text-gray-200">{post.content}</p>
+                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(post.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  );
-};
-
-export default Profile;
+  )
+}
