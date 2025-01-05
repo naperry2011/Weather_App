@@ -1,15 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { AuthError } from '@supabase/supabase-js'
 
 export default function SignInForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const router = useRouter()
   const supabase = createClientComponentClient()
 
@@ -19,102 +19,70 @@ export default function SignInForm() {
     setError(null)
 
     try {
-      let result;
-      
-      if (mode === 'signin') {
-        result = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-      } else {
-        result = await supabase.auth.signUp({
-          email,
-          password,
-        })
-      }
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-      if (result.error) {
-        throw result.error
-      }
-
+      if (authError) throw authError
       router.refresh()
-    } catch (error) {
-      setError(error.message)
+    } catch (err) {
+      if (err instanceof AuthError) {
+        setError(err.message)
+      } else {
+        setError('An unexpected error occurred')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="w-full max-w-md">
-      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-8">
-        <div className="flex justify-center gap-4 mb-6">
-          <button
-            type="button"
-            className={`px-4 py-2 rounded-md ${
-              mode === 'signin' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setMode('signin')}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`px-4 py-2 rounded-md ${
-              mode === 'signup' 
-                ? 'bg-blue-500 text-white' 
-                : 'bg-gray-100 text-gray-700'
-            }`}
-            onClick={() => setMode('signup')}
-          >
-            Sign Up
-          </button>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm">
+          {error}
         </div>
+      )}
+      
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Email
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          required
+          autoComplete="email"
+        />
+      </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
-            {error}
-          </div>
-        )}
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          required
+          autoComplete="current-password"
+        />
+      </div>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            required
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
-        </button>
-      </form>
-    </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 
+                 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+      >
+        {isLoading ? 'Signing in...' : 'Sign in'}
+      </button>
+    </form>
   )
 } 
