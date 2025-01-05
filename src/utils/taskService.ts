@@ -1,5 +1,16 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { Task, NewTask } from '@/types/task'
+import { Task, TaskCategory, TaskStatus, TaskPriority } from '@/types/task'
+
+interface TaskFilters {
+  category?: TaskCategory
+  status?: TaskStatus
+  priority?: TaskPriority
+  startDate?: string
+  endDate?: string
+  sortBy?: 'due_date' | 'priority' | 'status'
+  sortOrder: 'asc' | 'desc'
+  search?: string
+}
 
 const supabase = createClientComponentClient()
 
@@ -92,53 +103,41 @@ export const taskService = {
     return data || []
   },
 
-  async getTasksWithFilters(filters: {
-    category?: TaskCategory
-    status?: TaskStatus
-    priority?: TaskPriority
-    startDate?: string
-    endDate?: string
-    sortBy?: string
-    sortOrder?: 'asc' | 'desc'
-    search?: string
-  }): Promise<Task[]> {
+  async getTasksWithFilters(filters: TaskFilters): Promise<Task[]> {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
     let query = supabase
       .from('tasks')
       .select('*')
-
-    if (filters.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
-    }
+      .eq('user_id', user.id)
 
     if (filters.category) {
       query = query.eq('category', filters.category)
     }
-
     if (filters.status) {
       query = query.eq('status', filters.status)
     }
-
     if (filters.priority) {
       query = query.eq('priority', filters.priority)
     }
-
     if (filters.startDate) {
       query = query.gte('due_date', filters.startDate)
     }
-
     if (filters.endDate) {
       query = query.lte('due_date', filters.endDate)
     }
-
-    if (filters.sortBy && filters.sortOrder) {
+    if (filters.search) {
+      query = query.ilike('title', `%${filters.search}%`)
+    }
+    if (filters.sortBy) {
       query = query.order(filters.sortBy, { ascending: filters.sortOrder === 'asc' })
     }
 
     const { data, error } = await query
 
     if (error) throw error
-
-    return data
+    return data || []
   },
 
   async getTaskStatistics(): Promise<{
