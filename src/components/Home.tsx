@@ -1,33 +1,61 @@
-import React, { useState, useEffect } from "react";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+'use client'
+
+import React, { useState, useEffect } from "react"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from "next/navigation"
 
 interface Post {
-  id: string;
-  text: string;
-  imageUrl: string;
-  userId: string;
+  id: string
+  title: string
+  content: string
+  created_at: string
+  user_id: string
+  image_url?: string
 }
 
-const Home: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>([]);
+export default function Home() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    const postsQuery = query(
-      collection(db, "posts"),
-      orderBy("createdAt", "desc"),
-    );
+    const fetchPosts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*')
+          .order('created_at', { ascending: false })
 
-    const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
-      const newPosts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Post[];
-      setPosts(newPosts);
-    });
+        if (error) throw error
+        setPosts(data || [])
+      } catch (error) {
+        console.error('Error fetching posts:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    return () => unsubscribe();
-  }, []);
+    fetchPosts()
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('posts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, 
+        () => {
+          fetchPosts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase])
+
+  if (loading) {
+    return <div className="text-center p-4">Loading...</div>
+  }
 
   return (
     <div className="home p-4">
@@ -36,21 +64,22 @@ const Home: React.FC = () => {
         {posts.map((post) => (
           <div
             key={post.id}
-            className="post bg-white shadow-md rounded-lg p-4 mb-4"
+            className="post bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-4"
           >
-            {post.imageUrl && (
+            {post.image_url && (
               <img
-                src={post.imageUrl}
+                src={post.image_url}
                 alt="Post"
                 className="w-full h-64 object-cover rounded-lg mb-2"
               />
             )}
-            <p className="text-gray-800">{post.text}</p>
+            <p className="text-gray-800 dark:text-gray-200">{post.content}</p>
+            <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {new Date(post.created_at).toLocaleDateString()}
+            </div>
           </div>
         ))}
       </div>
     </div>
-  );
-};
-
-export default Home;
+  )
+}
